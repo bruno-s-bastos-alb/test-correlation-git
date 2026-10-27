@@ -1,0 +1,234 @@
+package pt.ptinovacao.alarmmgr.eventcorrelation.ptc.regrassoltas.pack119
+
+import com.alticelabs.alarmmgr.commons.correlation.model.NotifAlarmCorrelationEvent;
+import com.alticelabs.alarmmgr.correlation.engine.session.model.helper.GenericHelper;
+import pt.ptinovacao.alarmmgr.common.shared.fm.monitor.PerceivedSeverity;
+import java.util.logging.Logger;
+import java.util.*;
+import java.lang.*;
+
+import java.util.regex.Pattern;
+import java.util.regex.Matcher;
+
+global GenericHelper helper;
+global Logger logger;
+
+declare NotifAlarmCorrelationEvent
+@role( event )
+end
+
+function String extract(String regex, String value) {
+    Pattern ptn = Pattern.compile(regex);
+    if (value != null) {
+        Matcher m = ptn.matcher(value);
+        if (m.find()) {
+            return m.group(1);
+        }
+    }
+
+    return "";
+}
+
+function Long toLong(Object val){
+    Number num;
+
+    if (val instanceof String)
+        num = Long.parseLong((String)val);
+    else {
+        num = (Number) val;
+    }
+
+    return num != null ? num.longValue(): null;
+}
+
+
+function Map getAlarmUniqueKeys(List events){
+    Map<String, String> result = new HashMap<>();
+
+    if (events != null) {
+        for (NotifAlarmCorrelationEvent event : (List<NotifAlarmCorrelationEvent>)events) {
+            result.put(event.getAlarmUniqueKey(), "");
+        }
+    }
+
+    return result;
+}
+
+// Pack "Possible Fire Pack"
+rule "Automatic Clean_119"
+salience (-100)
+no-loop
+when
+    CLEAR: NotifAlarmCorrelationEvent(
+        ruleID == getPackId(),
+        perceivedSeverity == PerceivedSeverity.CLEARED
+    )
+
+    EVENTS_ARRAY: ArrayList(  ) from collect (
+        NotifAlarmCorrelationEvent(
+            ruleID == getPackId(),
+            alarmUniqueKey == CLEAR.alarmUniqueKey,
+            this before CLEAR
+        )
+    )
+then
+    retract(CLEAR);
+    for (NotifAlarmCorrelationEvent a: (List<NotifAlarmCorrelationEvent>)EVENTS_ARRAY ) {
+        retract(a);
+    }
+end
+rule "02 Update_119"
+no-loop
+when
+       SMOKE: NotifAlarmCorrelationEvent(
+          subsystem == "NOKIA",
+          specificProblem == "Smoke Detected",
+          localCode != null, localCode.matches("Room [0-9]*"
+),
+          managedObjectInstance != null, managedObjectInstance.matches("Sensor [0-9]*"
+),
+          perceivedSeverity != PerceivedSeverity.CLEARED
+       )
+
+       not NotifAlarmCorrelationEvent(
+          alarmUniqueKey == SMOKE.alarmUniqueKey,
+          perceivedSeverity == PerceivedSeverity.CLEARED,
+          this after SMOKE
+       )
+
+       ROOTCAUSE: NotifAlarmCorrelationEvent(
+          subsystem == "ALMMNG",
+          specificProblem == "Possible Fire",
+          perceivedSeverity != PerceivedSeverity.CLEARED,
+          managedObjectInstance == SMOKE.localCode,
+          map != null, !map.containsKey(SMOKE.alarmUniqueKey)
+       )
+
+then
+    ROOTCAUSE.addChild(SMOKE);
+    ROOTCAUSE.getMap().put(SMOKE.getAlarmUniqueKey() , "");
+
+    update(ROOTCAUSE);
+    NotifAlarmCorrelationEvent $ROOTCAUSE_toAM = new NotifAlarmCorrelationEvent(ROOTCAUSE);
+    $ROOTCAUSE_toAM.addChild(SMOKE);
+    $ROOTCAUSE_toAM.getMap().put(SMOKE.getAlarmUniqueKey() , "");
+    $ROOTCAUSE_toAM.setAdditionalInfo("Bundle=Possible Fire||Pack=Possible Fire Pack||Rule="+drools.getRule().getName());
+    helper.sendNodeAndHierarchy(drools.getRule().getName(), $ROOTCAUSE_toAM);
+end
+
+rule "01 Start_119"
+no-loop
+when
+       SMOKE: NotifAlarmCorrelationEvent(
+          subsystem == "NOKIA",
+          specificProblem == "Smoke Detected",
+          localCode != null, localCode.matches("Room [0-9]*"
+),
+          managedObjectInstance != null, managedObjectInstance.matches("Sensor [0-9]*"
+),
+          perceivedSeverity != PerceivedSeverity.CLEARED
+       )
+
+       not NotifAlarmCorrelationEvent(
+          alarmUniqueKey == SMOKE.alarmUniqueKey,
+          perceivedSeverity == PerceivedSeverity.CLEARED,
+          this after SMOKE
+       )
+
+       CHILDREN: ArrayList(CHILDREN.size() >= 2) from accumulate (
+          CHILDREN_pattern: NotifAlarmCorrelationEvent(
+             subsystem == SMOKE.subsystem,
+             specificProblem == SMOKE.specificProblem,
+             localCode == SMOKE.localCode
+          ), openEvents(CHILDREN_pattern)
+       )
+
+       not NotifAlarmCorrelationEvent(
+          subsystem == "ALMMNG",
+          specificProblem == "Possible Fire",
+          perceivedSeverity != PerceivedSeverity.CLEARED,
+          managedObjectInstance == SMOKE.localCode
+       )
+
+then
+    NotifAlarmCorrelationEvent ROOTCAUSE = new NotifAlarmCorrelationEvent(SMOKE);
+
+    ROOTCAUSE.setAdditionalInfo("Bundle=Possible Fire||Pack=Possible Fire Pack||Rule="+drools.getRule().getName());
+    ROOTCAUSE.setRuleID(getPackId());
+    ROOTCAUSE.setSubsystem("ALMMNG");
+    ROOTCAUSE.setSpecificProblem("Possible Fire");
+    ROOTCAUSE.setManagedObjectInstance(SMOKE.getLocalCode());
+    ROOTCAUSE.setPerceivedSeverity(PerceivedSeverity.CRITICAL);
+
+    ROOTCAUSE.addChildren(CHILDREN);
+    ROOTCAUSE.getMap().putAll(getAlarmUniqueKeys(CHILDREN));
+
+    insert(ROOTCAUSE);
+    helper.sendNodeAndHierarchy(drools.getRule().getName(), ROOTCAUSE);
+end
+
+rule "03 Close_119"
+no-loop
+when
+       SMOKE: NotifAlarmCorrelationEvent(
+          subsystem == "NOKIA",
+          specificProblem == "Smoke Detected",
+          localCode != null, localCode.matches("Room [0-9]*"
+),
+          managedObjectInstance != null, managedObjectInstance.matches("Sensor [0-9]*"
+),
+          perceivedSeverity == PerceivedSeverity.CLEARED
+       )
+
+       not NotifAlarmCorrelationEvent(
+          alarmUniqueKey == SMOKE.alarmUniqueKey,
+          perceivedSeverity != PerceivedSeverity.CLEARED,
+          this after SMOKE
+       )
+
+       CHILDREN: ArrayList(CHILDREN.size() < 2) from accumulate (
+          CHILDREN_pattern: NotifAlarmCorrelationEvent(
+             subsystem == SMOKE.subsystem,
+             specificProblem == SMOKE.specificProblem,
+             localCode == SMOKE.localCode
+          ), openEvents(CHILDREN_pattern)
+       )
+
+       ROOTCAUSE: NotifAlarmCorrelationEvent(
+          subsystem == "ALMMNG",
+          specificProblem == "Possible Fire",
+          perceivedSeverity != PerceivedSeverity.CLEARED,
+          managedObjectInstance == SMOKE.localCode
+       )
+
+then
+    NotifAlarmCorrelationEvent ROOTCAUSE_CLEAR = new NotifAlarmCorrelationEvent(ROOTCAUSE);
+
+    ROOTCAUSE_CLEAR.setAdditionalInfo("Bundle=Possible Fire||Pack=Possible Fire Pack||Rule="+drools.getRule().getName());
+    ROOTCAUSE_CLEAR.setRuleID(getPackId());
+    ROOTCAUSE_CLEAR.setPerceivedSeverity(PerceivedSeverity.CLEARED);
+
+    insert(ROOTCAUSE_CLEAR);
+    helper.sendNodeAndHierarchy(drools.getRule().getName(), ROOTCAUSE_CLEAR);
+end
+
+
+
+rule "Automatic Duplicate Removal_119"
+salience (500)
+no-loop
+when
+    ORIGINAL: NotifAlarmCorrelationEvent(
+        ruleID == getPackId()
+    )
+
+    DUPLICATE: NotifAlarmCorrelationEvent(
+        ruleID == getPackId(),
+        alarmUniqueKey == ORIGINAL.alarmUniqueKey,
+        perceivedSeverity == ORIGINAL.perceivedSeverity,
+        this after ORIGINAL
+    )
+then
+    retract(ORIGINAL);
+end
+
