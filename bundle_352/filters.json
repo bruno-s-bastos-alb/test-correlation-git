@@ -1,0 +1,1 @@
+[{"id":109,"packId":210,"entity":"ALARM","content":{"operator":"AND","name":"filter","readOnly":false,"conditions":[{"attribute":"subsystem","operator":"in","values":["NOKIA"]}],"notCondition":false}}]
