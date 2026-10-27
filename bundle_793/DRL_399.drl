@@ -1,0 +1,139 @@
+package pt.ptinovacao.alarmmgr.eventcorrelation.ptc.regrassoltas.pack399
+
+import com.alticelabs.alarmmgr.commons.correlation.model.NotifAlarmCorrelationEvent;
+import com.alticelabs.alarmmgr.correlation.engine.session.model.helper.GenericHelper;
+import pt.ptinovacao.alarmmgr.common.shared.fm.monitor.PerceivedSeverity;
+import java.util.logging.Logger;
+import java.util.*;
+import java.lang.*;
+
+import java.util.regex.Pattern;
+import java.util.regex.Matcher;
+
+global GenericHelper helper;
+global Logger logger;
+
+declare NotifAlarmCorrelationEvent
+@role( event )
+end
+
+function String extract(String regex, String value) {
+    Pattern ptn = Pattern.compile(regex);
+    if (value != null) {
+        Matcher m = ptn.matcher(value);
+        if (m.find()) {
+            return m.group(1);
+        }
+    }
+
+    return "";
+}
+
+function Long toLong(Object val){
+    Number num;
+
+    if (val instanceof String)
+        num = Long.parseLong((String)val);
+    else {
+        num = (Number) val;
+    }
+
+    return num != null ? num.longValue(): null;
+}
+
+
+function Map getAlarmUniqueKeys(List events){
+    Map<String, String> result = new HashMap<>();
+
+    if (events != null) {
+        for (NotifAlarmCorrelationEvent event : (List<NotifAlarmCorrelationEvent>)events) {
+            result.put(event.getAlarmUniqueKey(), "");
+        }
+    }
+
+    return result;
+}
+
+// Pack "PackMarco"
+rule "Automatic Clean_399"
+salience (-100)
+no-loop
+when
+    CLEAR: NotifAlarmCorrelationEvent(
+        ruleID == getPackId(),
+        perceivedSeverity == PerceivedSeverity.CLEARED
+    )
+
+    EVENTS_ARRAY: ArrayList(  ) from collect (
+        NotifAlarmCorrelationEvent(
+            ruleID == getPackId(),
+            alarmUniqueKey == CLEAR.alarmUniqueKey,
+            this before CLEAR
+        )
+    )
+then
+    retract(CLEAR);
+    for (NotifAlarmCorrelationEvent a: (List<NotifAlarmCorrelationEvent>)EVENTS_ARRAY ) {
+        retract(a);
+    }
+end
+rule "RegraLinks_399"
+no-loop
+when
+       EVENT_1: NotifAlarmCorrelationEvent(
+          links != null, links.contains(),
+          moiFriendlyName != null, moiFriendlyName.contains("AAAAA")
+       )
+
+then
+    EVENT_1.setLinks();
+    EVENT_1.setMoiFriendlyName("ASASASAS");
+
+    update(EVENT_1);
+    NotifAlarmCorrelationEvent $EVENT_1_toAM = new NotifAlarmCorrelationEvent(EVENT_1);
+    $EVENT_1_toAM.setAdditionalInfo("Bundle=MarcoBundle||Pack=PackMarco||Rule="+drools.getRule().getName());
+    helper.sendNodeAndHierarchy(drools.getRule().getName(), $EVENT_1_toAM);
+end
+
+rule "RegraMarco_399"
+no-loop
+when
+       ROOT: NotifAlarmCorrelationEvent(
+          subsystem == "NOKIA",
+          additionalText != null, additionalText.contains("CorrelacionarMarco")
+       )
+
+then
+    NotifAlarmCorrelationEvent SECONDARY = new NotifAlarmCorrelationEvent(ROOT);
+
+    SECONDARY.setAdditionalInfo("Bundle=MarcoBundle||Pack=PackMarco||Rule="+drools.getRule().getName());
+    SECONDARY.setRuleID(getPackId());
+    SECONDARY.setAdditionalText("CorrelacionadoMarco");
+
+    SECONDARY.addChild(ROOT);
+    SECONDARY.getMap().put(ROOT.getAlarmUniqueKey() , "");
+
+    insert(SECONDARY);
+    helper.sendNodeAndHierarchy(drools.getRule().getName(), SECONDARY);
+end
+
+
+
+rule "Automatic Duplicate Removal_399"
+salience (500)
+no-loop
+when
+    ORIGINAL: NotifAlarmCorrelationEvent(
+        ruleID == getPackId()
+    )
+
+    DUPLICATE: NotifAlarmCorrelationEvent(
+        ruleID == getPackId(),
+        alarmUniqueKey == ORIGINAL.alarmUniqueKey,
+        perceivedSeverity == ORIGINAL.perceivedSeverity,
+        this after ORIGINAL
+    )
+then
+    retract(ORIGINAL);
+end
+
