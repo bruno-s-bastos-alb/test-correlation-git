@@ -1,0 +1,1 @@
+[{"id":244,"packId":925,"entity":"ALARM","content":{"operator":"AND","name":"filter","readOnly":false,"conditions":[{"attribute":"sol_BR","operator":"ctIgCase","values":["test"]}],"notCondition":false}}]
