@@ -108,7 +108,8 @@ rule "aaa_139"
 no-loop
 when
        EVENT_1: NotifAlarmCorrelationEvent(
-          perceivedSeverity != PerceivedSeverity.CLEARED
+          perceivedSeverity != PerceivedSeverity.CLEARED,
+          subsystem == "NOKIA"
        )
 
        not NotifAlarmCorrelationEvent(
