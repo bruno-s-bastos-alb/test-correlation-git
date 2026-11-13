@@ -1,0 +1,125 @@
+package pt.ptinovacao.alarmmgr.eventcorrelation.ptc.regrassoltas.pack139
+
+import com.alticelabs.alarmmgr.commons.correlation.model.NotifAlarmCorrelationEvent;
+import com.alticelabs.alarmmgr.correlation.engine.session.model.helper.GenericHelper;
+import pt.ptinovacao.alarmmgr.common.shared.fm.monitor.Link;
+import pt.ptinovacao.alarmmgr.common.shared.fm.monitor.PerceivedSeverity;
+import java.util.logging.Logger;
+import java.util.*;
+import java.lang.*;
+
+import java.util.regex.Pattern;
+import java.util.regex.Matcher;
+
+global GenericHelper helper;
+global Logger logger;
+
+declare NotifAlarmCorrelationEvent
+@role( event )
+end
+
+function String extract(String regex, String value) {
+    Pattern ptn = Pattern.compile(regex);
+    if (value != null) {
+        Matcher m = ptn.matcher(value);
+        if (m.find()) {
+            return m.group(1);
+        }
+    }
+
+    return "";
+}
+
+function Long toLong(Object val){
+    Number num;
+
+    if (val instanceof String)
+        num = Long.parseLong((String)val);
+    else {
+        num = (Number) val;
+    }
+
+    return num != null ? num.longValue(): null;
+}
+
+function boolean containsLinkUrl(List links, Link expectedLink) {
+    if (links == null || expectedLink == null || expectedLink.getUrl() == null) {
+        return false;
+    }
+
+    for (Object value : links) {
+        if (value instanceof Link) {
+            Link link = (Link) value;
+            if (expectedLink.getUrl().equals(link.getUrl())
+                    && (expectedLink.getAttribute() == null
+                        || expectedLink.getAttribute().equals(link.getAttribute()))
+                    && (expectedLink.getAlias() == null
+                        || expectedLink.getAlias().equals(link.getAlias()))) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+function void appendLinks(NotifAlarmCorrelationEvent target, Object values) {
+    if (target == null || values == null) {
+        return;
+    }
+
+    if (values instanceof Link) {
+        target.addLink((Link) values);
+        return;
+    }
+
+    if (values instanceof Iterable) {
+        for (Object value : (Iterable) values) {
+            appendLinks(target, value);
+        }
+        return;
+    }
+
+    if (values instanceof Link[]) {
+        for (Link value : (Link[]) values) {
+            appendLinks(target, value);
+        }
+        return;
+    }
+
+    throw new IllegalArgumentException("Expected a Link or an iterable of Links");
+}
+
+
+function Map getAlarmUniqueKeys(List events){
+    Map<String, String> result = new HashMap<>();
+
+    if (events != null) {
+        for (NotifAlarmCorrelationEvent event : (List<NotifAlarmCorrelationEvent>)events) {
+            result.put(event.getAlarmUniqueKey(), "");
+        }
+    }
+
+    return result;
+}
+
+// Pack "performance"
+rule "aaa_139"
+no-loop
+when
+       EVENT_1: NotifAlarmCorrelationEvent(
+          perceivedSeverity != PerceivedSeverity.CLEARED
+       )
+
+       not NotifAlarmCorrelationEvent(
+          alarmUniqueKey == EVENT_1.alarmUniqueKey,
+          perceivedSeverity == PerceivedSeverity.CLEARED,
+          this after EVENT_1
+       )
+
+then
+end
+
+
+
+

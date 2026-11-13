@@ -1,0 +1,1 @@
+[{"id":78,"packId":139,"entity":"ALARM","content":{"operator":"AND","name":"filter","readOnly":false,"conditions":[{"attribute":"tech","operator":"in","values":["112"]}],"notCondition":false}}]
