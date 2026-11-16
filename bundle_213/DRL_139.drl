@@ -119,6 +119,15 @@ when
        )
 
 then
+    NotifAlarmCorrelationEvent EVENT_2 = new NotifAlarmCorrelationEvent(EVENT_1);
+    EVENT_2.setId(null);
+
+    EVENT_2.setAdditionalInfo("Bundle=Test Performance||Pack=performance||Rule="+drools.getRule().getName());
+    EVENT_2.setRuleID(getPackId());
+    EVENT_2.setTechnology("CORR");
+
+    insert(EVENT_2);
+    helper.send(drools.getRule().getName(), EVENT_2);
 end
 
 
