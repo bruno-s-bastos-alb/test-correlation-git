@@ -155,12 +155,10 @@ when
 
 then
     ROOTCAUSE.addChild(SMOKE);
-    ROOTCAUSE.getMap().put(SMOKE.getAlarmUniqueKey() , "");
 
     update(ROOTCAUSE);
     NotifAlarmCorrelationEvent $ROOTCAUSE_toAM = new NotifAlarmCorrelationEvent(ROOTCAUSE);
     $ROOTCAUSE_toAM.addChild(SMOKE);
-    $ROOTCAUSE_toAM.getMap().put(SMOKE.getAlarmUniqueKey() , "");
     $ROOTCAUSE_toAM.setAdditionalInfo("Bundle=Possible Fire||Pack=Possible Fire Packs||Rule="+drools.getRule().getName());
     helper.send(drools.getRule().getName(), $ROOTCAUSE_toAM);
 end
@@ -211,7 +209,6 @@ then
     ROOTCAUSE.setPerceivedSeverity(PerceivedSeverity.CRITICAL);
 
     ROOTCAUSE.addChildren(CHILDREN);
-    ROOTCAUSE.getMap().putAll(getAlarmUniqueKeys(CHILDREN));
 
     insert(ROOTCAUSE);
     helper.send(drools.getRule().getName(), ROOTCAUSE);
